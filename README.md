@@ -2,7 +2,7 @@
 
 A [Scriptable](https://scriptable.app) widget that shows your Claude.ai session and weekly usage limits right on your iPhone Home Screen.
 
-![Home screen widget showing Claude session and weekly usage](screenshot.png)
+<img src="screenshot.png" alt="Home screen widget showing Claude session and weekly usage" width="300">
 
 ## How it works
 
