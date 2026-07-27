@@ -3,6 +3,9 @@
 //    Paste the sessionKey ONLY into the popup that appears — never store it elsewhere.
 //    The org ID is auto-detected from your account, no need to edit this file.
 // 2) Then add a Scriptable widget to your Home Screen and select this script.
+// 3) If your session expires, just open the script directly in the app (not the
+//    widget) and run it — an expired/invalid session is detected automatically
+//    and you'll be prompted to paste a fresh sessionKey.
 
 const KEYCHAIN_SESSION_KEY = "claude_session_key";
 const KEYCHAIN_ORG_ID = "claude_org_id";
@@ -47,7 +50,9 @@ async function getOrgId(sessionKey) {
   req.headers = authHeaders(sessionKey);
   const data = await req.loadJSON();
   if (req.response && req.response.statusCode >= 400) {
-    throw new Error(`조직 조회 실패 HTTP ${req.response.statusCode}`);
+    const err = new Error(`조직 조회 실패 HTTP ${req.response.statusCode}`);
+    err.status = req.response.statusCode;
+    throw err;
   }
   if (!Array.isArray(data) || data.length === 0) {
     throw new Error("계정에 연결된 조직을 찾을 수 없음");
@@ -63,9 +68,29 @@ async function fetchUsage(sessionKey, orgId) {
   req.headers = authHeaders(sessionKey);
   const json = await req.loadJSON();
   if (req.response && req.response.statusCode >= 400) {
-    throw new Error(`HTTP ${req.response.statusCode}`);
+    const err = new Error(`HTTP ${req.response.statusCode}`);
+    err.status = req.response.statusCode;
+    throw err;
   }
   return json;
+}
+
+function isAuthError(e) {
+  return e && (e.status === 401 || e.status === 403);
+}
+
+async function promptForNewSessionKey() {
+  let alert = new Alert();
+  alert.title = "Claude 세션 키 만료됨";
+  alert.message = "세션이 만료된 것 같습니다. claude.ai에 다시 로그인해 새 'sessionKey' 쿠키 값을 붙여넣으세요.";
+  alert.addSecureTextField("sk-ant-sid...");
+  alert.addAction("갱신");
+  alert.addCancelAction("취소");
+  const idx = await alert.presentAlert();
+  if (idx === -1) return null;
+  const value = alert.textFieldValue(0);
+  if (value) Keychain.set(KEYCHAIN_SESSION_KEY, value);
+  return value;
 }
 
 function formatResetTime(iso) {
@@ -173,7 +198,28 @@ async function run() {
       w.presentSmall();
     }
   } catch (e) {
-    const w = buildErrorWidget("요청 실패: " + e.message);
+    if (isAuthError(e) && !config.runsInWidget) {
+      // Interactive prompts only work when run inside the app, not as a widget.
+      const newKey = await promptForNewSessionKey();
+      if (newKey) {
+        try {
+          const orgId = await getOrgId(newKey);
+          const data = await fetchUsage(newKey, orgId);
+          const w = buildUsageWidget(data);
+          w.presentSmall();
+          return;
+        } catch (e2) {
+          const w = buildErrorWidget("갱신 후에도 실패: " + e2.message);
+          w.presentSmall();
+          return;
+        }
+      }
+    }
+
+    const message = isAuthError(e)
+      ? "세션 만료됨\nScriptable 앱에서 직접 실행해 갱신하세요"
+      : "요청 실패: " + e.message;
+    const w = buildErrorWidget(message);
     if (config.runsInWidget) {
       Script.setWidget(w);
     } else {

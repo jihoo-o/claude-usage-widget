@@ -23,6 +23,10 @@ Because this relies on an undocumented, internal endpoint, it may break at any t
 6. Long-press your Home Screen → **Add Widget** → search **Scriptable** → choose the small size → add it.
 7. Edit the new widget and set its **Script** to the one you created.
 
+## When your session expires
+
+`sessionKey` cookies eventually expire. When that happens, just open the script directly inside the Scriptable app (not the Home Screen widget) and tap **Run**. The script detects the auth failure automatically and prompts you to paste a fresh `sessionKey` — no need to manually clear anything.
+
 ## Security notes
 
 - Never share your `sessionKey` with anyone — it's equivalent to being logged in to your account.
